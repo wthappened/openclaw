@@ -182,6 +182,66 @@ describe("setupSearch", () => {
     );
   });
 
+  it("shows bundled plugin providers directly in the picker instead of the external install path", async () => {
+    loadOpenClawPlugins.mockReturnValue({
+      searchProviders: [],
+      plugins: [],
+      typedHooks: [],
+    });
+    loadPluginManifestRegistry.mockReturnValue({
+      plugins: [
+        {
+          id: "tavily-search",
+          name: "Tavily Search",
+          description: "Search the web using Tavily.",
+          origin: "bundled",
+          source: "/tmp/bundled/tavily-search",
+          configSchema: {
+            type: "object",
+            required: ["apiKey"],
+            properties: {
+              apiKey: { type: "string", minLength: 1, pattern: "^tvly-\\S+$" },
+            },
+          },
+          configUiHints: {
+            apiKey: {
+              label: "Tavily API key",
+              placeholder: "tvly-...",
+              sensitive: true,
+            },
+          },
+        },
+      ],
+      diagnostics: [],
+    });
+
+    const cfg: OpenClawConfig = {};
+    const { prompter } = createPrompter({ selectValue: "__skip__" });
+    await setupSearch(cfg, runtime, prompter);
+
+    const providerSelectCall = (prompter.select as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0]?.message === "Choose active web search provider",
+    );
+    expect(providerSelectCall?.[0]).toEqual(
+      expect.objectContaining({
+        options: expect.arrayContaining([
+          expect.objectContaining({
+            value: "tavily",
+            label: "Tavily Search",
+            hint: expect.stringContaining("Bundled plugin"),
+          }),
+        ]),
+      }),
+    );
+    expect(providerSelectCall?.[0]?.options).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          value: "__install_plugin__",
+        }),
+      ]),
+    );
+  });
+
   it("uses the updated configure-or-install action label", async () => {
     vi.stubEnv("BRAVE_API_KEY", "BSA-test-key");
     loadOpenClawPlugins.mockReturnValue({

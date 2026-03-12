@@ -23,6 +23,9 @@ const mocks = vi.hoisted(() => ({
 const loadOpenClawPlugins = vi.hoisted(() =>
   vi.fn(() => ({ searchProviders: [] as unknown[], plugins: [] as unknown[] })),
 );
+const loadPluginManifestRegistry = vi.hoisted(() =>
+  vi.fn(() => ({ plugins: [] as unknown[], diagnostics: [] as unknown[] })),
+);
 const ensureOnboardingPluginInstalled = vi.hoisted(() =>
   vi.fn(async ({ cfg }: { cfg: OpenClawConfig }) => ({ cfg, installed: false })),
 );
@@ -53,6 +56,10 @@ vi.mock("../wizard/clack-prompter.js", () => ({
 
 vi.mock("../plugins/loader.js", () => ({
   loadOpenClawPlugins,
+}));
+
+vi.mock("../plugins/manifest-registry.js", () => ({
+  loadPluginManifestRegistry,
 }));
 
 vi.mock("./onboarding/plugin-install.js", () => ({
@@ -144,6 +151,8 @@ describe("runConfigureWizard", () => {
     mocks.summarizeExistingConfig.mockReset();
     loadOpenClawPlugins.mockReset();
     loadOpenClawPlugins.mockReturnValue({ searchProviders: [], plugins: [] });
+    loadPluginManifestRegistry.mockReset();
+    loadPluginManifestRegistry.mockReturnValue({ plugins: [], diagnostics: [] });
     ensureOnboardingPluginInstalled.mockReset();
     ensureOnboardingPluginInstalled.mockImplementation(
       async ({ cfg }: { cfg: OpenClawConfig }) => ({
@@ -241,7 +250,6 @@ describe("runConfigureWizard", () => {
         tools: expect.objectContaining({
           web: expect.objectContaining({
             search: expect.objectContaining({
-              provider: "tavily",
               enabled: true,
             }),
           }),
@@ -327,6 +335,7 @@ describe("runConfigureWizard", () => {
         }),
       }),
     );
+    expect(mocks.writeConfigFile.mock.calls[0]?.[0]?.tools?.web?.search?.provider).toBeUndefined();
   });
 
   it("re-prompts invalid plugin config values during configure", async () => {
@@ -436,7 +445,7 @@ describe("runConfigureWizard", () => {
     );
   });
 
-  it("installs a plugin search provider from configure and continues setup", async () => {
+  it("configures a bundled plugin search provider from configure without the external install step", async () => {
     loadOpenClawPlugins.mockImplementation(({ config }: { config: OpenClawConfig }) => {
       const enabled = config.plugins?.entries?.["tavily-search"]?.enabled === true;
       return enabled
@@ -482,6 +491,36 @@ describe("runConfigureWizard", () => {
           }
         : { searchProviders: [], plugins: [] };
     });
+    loadPluginManifestRegistry.mockReturnValue({
+      plugins: [
+        {
+          id: "tavily-search",
+          name: "Tavily Search",
+          description: "Search the web using Tavily.",
+          origin: "bundled",
+          source: "/tmp/bundled/tavily-search",
+          configSchema: {
+            type: "object",
+            required: ["apiKey"],
+            properties: {
+              apiKey: { type: "string", minLength: 1, pattern: "^tvly-\\S+$" },
+              searchDepth: { type: "string", enum: ["basic", "advanced"] },
+            },
+          },
+          configUiHints: {
+            apiKey: {
+              label: "Tavily API key",
+              placeholder: "tvly-...",
+              sensitive: true,
+            },
+            searchDepth: {
+              label: "Search depth",
+            },
+          },
+        },
+      ],
+      diagnostics: [],
+    });
     ensureOnboardingPluginInstalled.mockImplementation(
       async ({ cfg }: { cfg: OpenClawConfig }) => ({
         cfg: {
@@ -523,7 +562,7 @@ describe("runConfigureWizard", () => {
     mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
       if (params.message === "Choose active web search provider") {
-        return "__install_plugin__";
+        return "tavily";
       }
       if (params.message.startsWith("Search depth")) {
         return "advanced";
@@ -541,23 +580,8 @@ describe("runConfigureWizard", () => {
       },
     );
 
-    expect(ensureOnboardingPluginInstalled).toHaveBeenCalledWith(
-      expect.objectContaining({
-        entry: expect.objectContaining({
-          id: "tavily-search",
-          install: expect.objectContaining({
-            npmSpec: "@openclaw/tavily-search",
-            localPath: "extensions/tavily-search",
-          }),
-        }),
-        workspaceDir: "/tmp/configure-install-workspace",
-      }),
-    );
-    expect(reloadOnboardingPluginRegistry).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workspaceDir: "/tmp/configure-install-workspace",
-      }),
-    );
+    expect(ensureOnboardingPluginInstalled).not.toHaveBeenCalled();
+    expect(reloadOnboardingPluginRegistry).not.toHaveBeenCalled();
     expect(mocks.writeConfigFile).toHaveBeenCalledWith(
       expect.objectContaining({
         tools: expect.objectContaining({

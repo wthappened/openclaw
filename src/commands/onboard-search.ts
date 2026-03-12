@@ -133,7 +133,13 @@ export function resolveInstallableSearchProviderPlugins(
   const loadedPluginProviderIds = new Set(
     providerEntries.filter((entry) => entry.kind === "plugin").map((entry) => entry.value),
   );
-  return SEARCH_PROVIDER_PLUGIN_INSTALL_CATALOG.map((entry) => ({
+  return SEARCH_PROVIDER_PLUGIN_INSTALL_CATALOG.filter((entry) => {
+    const providerEntry = providerEntries.find(
+      (providerEntry) =>
+        providerEntry.kind === "plugin" && providerEntry.value === entry.providerId,
+    );
+    return providerEntry?.kind !== "plugin" || providerEntry.origin !== "bundled";
+  }).map((entry) => ({
     ...entry,
     description: loadedPluginProviderIds.has(entry.providerId)
       ? `${entry.description} Already installed.`
@@ -570,6 +576,39 @@ export async function resolveSearchProviderPickerEntries(
     pluginEntries = [];
   }
 
+  try {
+    loadPluginManifestRegistry({
+      config,
+      workspaceDir,
+      cache: false,
+    });
+    const loadedPluginProviderIds = new Set(pluginEntries.map((entry) => entry.value));
+    const bundledManifestEntries = SEARCH_PROVIDER_PLUGIN_INSTALL_CATALOG.map((installEntry) =>
+      buildPluginSearchProviderEntryFromManifest({
+        config,
+        installEntry,
+        workspaceDir,
+      }),
+    )
+      .filter(
+        (entry): entry is PluginSearchProviderEntry =>
+          Boolean(entry) && entry.origin === "bundled" && !loadedPluginProviderIds.has(entry.value),
+      )
+      .map((entry) => {
+        const pluginConfig = getPluginConfig(config, entry.pluginId);
+        const validation = validatePluginSearchProviderConfig(entry, pluginConfig);
+        return {
+          ...entry,
+          configured: validation.ok,
+        };
+      });
+    pluginEntries = [...pluginEntries, ...bundledManifestEntries].toSorted((left, right) =>
+      left.label.localeCompare(right.label),
+    );
+  } catch {
+    // Ignore manifest lookup failures and fall back to loaded entries only.
+  }
+
   return [...builtins, ...pluginEntries];
 }
 
@@ -602,13 +641,13 @@ function buildPluginSearchProviderEntryFromManifest(params: {
     value: params.installEntry.providerId,
     label: params.installEntry.meta.label,
     hint: [
-      params.installEntry.description || pluginRecord.description || "Plugin-provided web search",
+      pluginRecord.description || "Plugin-provided web search",
       formatPluginSourceHint(pluginRecord.origin),
     ].join(" · "),
     configured: false,
     pluginId: pluginRecord.id,
     origin: pluginRecord.origin,
-    description: params.installEntry.description || pluginRecord.description,
+    description: pluginRecord.description,
     docsUrl: undefined,
     configFieldOrder: undefined,
     configJsonSchema: pluginRecord.configSchema,
