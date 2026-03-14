@@ -90,6 +90,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...nodeHandlers,
   ...nodePendingHandlers,
   ...pushHandlers,
+  ...ptyHandlers,
   ...sendHandlers,
   ...usageHandlers,
   ...agentHandlers,

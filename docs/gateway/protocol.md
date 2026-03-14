@@ -145,6 +145,8 @@ Common scopes:
 
 - `operator.read`
 - `operator.write`
+  - includes PTY lifecycle methods: `pty.create`, `pty.write`, `pty.resize`, `pty.kill`
+  - `pty.list` is readable by `operator.read` / `operator.write`
 - `operator.admin`
 - `operator.approvals`
 - `operator.pairing`
@@ -181,6 +183,10 @@ The Gateway treats these as **claims** and enforces server-side allowlists.
   - `source`: `core` or `plugin`
   - `pluginId`: plugin owner when `source="plugin"`
   - `optional`: whether a plugin tool is optional
+- PTY helpers:
+  - `pty.create`, `pty.write`, `pty.resize`, `pty.kill` require `operator.write`
+  - `pty.list` is available to `operator.read` / `operator.write`
+  - PTY events are targeted to the owning operator connection/device: `pty.output`, `pty.exit`
 
 ## Exec approvals
 

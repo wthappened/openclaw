@@ -99,6 +99,11 @@ const BASE_METHODS = [
   "agent.identity.get",
   "agent.wait",
   "browser.request",
+  "pty.create",
+  "pty.write",
+  "pty.resize",
+  "pty.kill",
+  "pty.list",
   // WebChat WebSocket-native chat methods
   "chat.history",
   "chat.abort",
