@@ -133,6 +133,7 @@ describe("channel-auth", () => {
         resolveAccount: vi.fn().mockReturnValue({ enabled: true }),
       },
     };
+    mocks.loadConfig.mockReturnValue({ channels: { whatsapp: {}, telegram: {} } });
     mocks.listChannelPlugins.mockReturnValue([telegramPlugin, plugin]);
 
     await runChannelLogin({}, runtime);

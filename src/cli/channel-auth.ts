@@ -31,7 +31,11 @@ function isConfiguredAuthPlugin(plugin: ChannelPlugin, cfg: OpenClawConfig): boo
   for (const accountId of plugin.config.listAccountIds(cfg)) {
     try {
       const account = plugin.config.resolveAccount(cfg, accountId);
-      const enabled = plugin.config.isEnabled ? plugin.config.isEnabled(account, cfg) : true;
+      const enabled = plugin.config.isEnabled
+        ? plugin.config.isEnabled(account, cfg)
+        : account && typeof account === "object"
+          ? ((account as { enabled?: boolean }).enabled ?? true)
+          : true;
       if (enabled) {
         return true;
       }
