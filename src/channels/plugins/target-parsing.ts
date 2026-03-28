@@ -1,6 +1,10 @@
-import { parseDiscordTarget } from "../../../extensions/discord/api.js";
-import { parseMSTeamsExplicitTarget } from "../../../extensions/msteams/api.js";
-import { parseTelegramTarget } from "../../../extensions/telegram/api.js";
+// Keep these imports on the narrow parser modules rather than the extension
+// `api.ts` barrels. `parseExplicitTargetForChannel()` runs in core command /
+// binding paths, so pulling the full extension export graphs here adds avoidable
+// startup cost and can drag in optional channel-only deps too early.
+import { parseDiscordTarget } from "../../../extensions/discord/src/targets.js";
+import { parseMSTeamsExplicitTarget } from "../../../extensions/msteams/src/resolve-allowlist.js";
+import { parseTelegramTarget } from "../../../extensions/telegram/src/targets.js";
 import type { ChatType } from "../chat-type.js";
 import { normalizeChatChannelId } from "../registry.js";
 import { getChannelPlugin, normalizeChannelId } from "./registry.js";
@@ -36,14 +40,21 @@ function parseWithPlugin(
     };
   }
   if (channel === "discord") {
-    const target = parseDiscordTarget(rawTarget, { defaultKind: "channel" });
-    if (!target) {
+    try {
+      const target = parseDiscordTarget(rawTarget, { defaultKind: "channel" });
+      if (!target) {
+        return null;
+      }
+      return {
+        to: target.id,
+        chatType: target.kind === "user" ? "direct" : "channel",
+      };
+    } catch {
+      // Discord's parser throws for malformed `@user`-style candidates. Keep
+      // this helper nullable so callers can skip bad candidates instead of
+      // aborting the whole command/binding resolution flow.
       return null;
     }
-    return {
-      to: target.id,
-      chatType: target.kind === "user" ? "direct" : "channel",
-    };
   }
   if (channel === "msteams") {
     return (
